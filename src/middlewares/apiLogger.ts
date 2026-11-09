@@ -115,7 +115,7 @@ export function apiLogger(req: Request, res: Response, next: NextFunction): void
         is_deleted: false,
       });
     } catch (logError) {
-      console.error('❌ Failed to record API log to database:', logError);
+      console.error(' Failed to record API log to database:', logError);
     }
   });
 

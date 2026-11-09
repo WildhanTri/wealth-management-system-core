@@ -20,6 +20,8 @@ export interface FixedCostAttributes extends BaseAuditAttributes {
   due_day: number;
   notes?: string | null;
   display_order?: number | null;
+  start_month?: string | null;
+  end_month?: string | null;
 }
 
 export class FixedCost extends Model<FixedCostAttributes> implements FixedCostAttributes {
@@ -31,6 +33,8 @@ export class FixedCost extends Model<FixedCostAttributes> implements FixedCostAt
   declare due_day: number;
   declare notes: string | null;
   declare display_order: number | null;
+  declare start_month: string | null;
+  declare end_month: string | null;
 
   declare created_at: Date;
   declare created_by: string | null;
@@ -79,6 +83,14 @@ FixedCost.init(
       type: DataTypes.INTEGER,
       allowNull: true,
       defaultValue: 0,
+    },
+    start_month: {
+      type: DataTypes.STRING(7),
+      allowNull: true,
+    },
+    end_month: {
+      type: DataTypes.STRING(7),
+      allowNull: true,
     },
   },
   {

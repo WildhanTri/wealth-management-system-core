@@ -24,7 +24,7 @@ export async function listTransactions(req: Request, res: Response): Promise<voi
 
     const transactions = await Transaction.findAll({
       where,
-      order: [['date', 'DESC'], ['created_at', 'DESC']],
+      order: [['date', 'DESC'], ['display_order', 'ASC'], ['created_at', 'DESC']],
     });
 
     const totalIncome = transactions
@@ -176,6 +176,37 @@ export async function deleteTransaction(req: Request, res: Response): Promise<vo
     sendSuccess({
       res,
       message: 'Transaction deleted successfully',
+    });
+  } catch (error: any) {
+    sendError({ res, message: error.message });
+  }
+}
+
+export async function reorderTransactions(req: Request, res: Response): Promise<void> {
+  try {
+    const userId = req.user?.id;
+    const { transactionIds } = req.body;
+
+    if (Array.isArray(transactionIds) && transactionIds.length > 0) {
+      await Promise.all(
+        transactionIds.map((id: string, index: number) =>
+          Transaction.update(
+            { display_order: index },
+            {
+              where: {
+                id,
+                ...(userId ? { user_id: userId } : {}),
+                is_deleted: false,
+              },
+            }
+          )
+        )
+      );
+    }
+
+    sendSuccess({
+      res,
+      message: 'Transactions reordered successfully',
     });
   } catch (error: any) {
     sendError({ res, message: error.message });

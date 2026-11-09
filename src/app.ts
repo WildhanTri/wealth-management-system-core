@@ -10,15 +10,25 @@ import { sendError } from './utils/response.js';
 export function createApp(): Application {
   const app = express();
 
-  // Security headers
-  app.use(helmet());
+  // CORS configuration (placed before helmet so preflight OPTIONS are answered immediately)
+  const allowedOrigins =
+    env.corsOrigin === '*'
+      ? true
+      : env.corsOrigin.split(',').map((origin) => origin.trim().replace(/\/$/, ''));
 
-  // CORS configuration
   app.use(
     cors({
-      origin: env.corsOrigin === '*' ? true : env.corsOrigin.split(','),
+      origin: allowedOrigins,
+      credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+    })
+  );
+
+  // Security headers with cross-origin resource policy enabled for API consumers
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
     })
   );
 

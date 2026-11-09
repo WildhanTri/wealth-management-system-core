@@ -13,16 +13,85 @@ function calculateMonthsRemaining(deadlineStr: string): number {
   return Math.max(1, months);
 }
 
+export function inferTargetClassification(
+  category: string,
+  existingType?: string,
+  existingTimeframe?: string
+): { targetType: 'needs' | 'wants'; timeframe: 'short_term' | 'long_term' } {
+  if (existingType && existingTimeframe) {
+    return {
+      targetType: existingType as 'needs' | 'wants',
+      timeframe: existingTimeframe as 'short_term' | 'long_term',
+    };
+  }
+
+  // Check known short-term needs
+  if (
+    [
+      'vehicle_maintenance',
+      'home_maintenance',
+      'medical_health',
+      'tax_bill',
+      'other_needs_short',
+    ].includes(category)
+  ) {
+    return { targetType: 'needs', timeframe: 'short_term' };
+  }
+  // Check known long-term needs
+  if (
+    [
+      'property',
+      'emergency_fund',
+      'education',
+      'retirement',
+      'other_needs_long',
+    ].includes(category)
+  ) {
+    return { targetType: 'needs', timeframe: 'long_term' };
+  }
+  // Check known short-term wants
+  if (
+    [
+      'gadget',
+      'shopping',
+      'entertainment',
+      'hobby',
+      'other_wants_short',
+    ].includes(category)
+  ) {
+    return { targetType: 'wants', timeframe: 'short_term' };
+  }
+  // Check known long-term wants
+  if (
+    [
+      'travel',
+      'vehicle',
+      'wedding',
+      'investment',
+      'other_wants_long',
+    ].includes(category)
+  ) {
+    return { targetType: 'wants', timeframe: 'long_term' };
+  }
+
+  return {
+    targetType: (existingType as any) || 'needs',
+    timeframe: (existingTimeframe as any) || 'short_term',
+  };
+}
+
 export async function listFinancialTargets(req: Request, res: Response): Promise<void> {
   try {
     const userId = req.user?.id;
-    const { category, priority, status } = req.query;
+    const { category, priority, status, targetType, timeframe } = req.query;
 
     const where: any = { is_deleted: false };
     if (userId) where.user_id = userId;
     if (category) where.category = category;
     if (priority) where.priority = priority;
     if (status) where.status = status;
+    if (targetType) where.target_type = targetType;
+    if (timeframe) where.timeframe = timeframe;
 
     const targets = await FinancialTarget.findAll({
       where,
@@ -37,6 +106,20 @@ export async function listFinancialTargets(req: Request, res: Response): Promise
     let totalRemainingAmount = 0;
     let totalMonthlyRequired = 0;
 
+    let needsTotalTarget = 0;
+    let needsTotalAllocated = 0;
+    let needsShortTermTarget = 0;
+    let needsShortTermAllocated = 0;
+    let needsLongTermTarget = 0;
+    let needsLongTermAllocated = 0;
+
+    let wantsTotalTarget = 0;
+    let wantsTotalAllocated = 0;
+    let wantsShortTermTarget = 0;
+    let wantsShortTermAllocated = 0;
+    let wantsLongTermTarget = 0;
+    let wantsLongTermAllocated = 0;
+
     const items = targets.map((t) => {
       const targetAmt = Number(t.target_amount) || 0;
       const currentAmt = Number(t.current_amount) || 0;
@@ -45,6 +128,12 @@ export async function listFinancialTargets(req: Request, res: Response): Promise
       const monthlyReq = t.status === 'completed' ? 0 : Math.ceil(remainingAmt / remainingMonths);
       const progressPercent = targetAmt > 0 ? Math.min(100, Math.round((currentAmt / targetAmt) * 100)) : 0;
 
+      const classification = inferTargetClassification(
+        t.category,
+        (t as any).target_type,
+        (t as any).timeframe
+      );
+
       totalTargetAmount += targetAmt;
       totalAllocatedAmount += currentAmt;
       totalRemainingAmount += remainingAmt;
@@ -52,8 +141,35 @@ export async function listFinancialTargets(req: Request, res: Response): Promise
         totalMonthlyRequired += monthlyReq;
       }
 
+      if (classification.targetType === 'needs') {
+        needsTotalTarget += targetAmt;
+        needsTotalAllocated += currentAmt;
+        if (classification.timeframe === 'short_term') {
+          needsShortTermTarget += targetAmt;
+          needsShortTermAllocated += currentAmt;
+        } else {
+          needsLongTermTarget += targetAmt;
+          needsLongTermAllocated += currentAmt;
+        }
+      } else {
+        wantsTotalTarget += targetAmt;
+        wantsTotalAllocated += currentAmt;
+        if (classification.timeframe === 'short_term') {
+          wantsShortTermTarget += targetAmt;
+          wantsShortTermAllocated += currentAmt;
+        } else {
+          wantsLongTermTarget += targetAmt;
+          wantsLongTermAllocated += currentAmt;
+        }
+      }
+
       return {
         ...t.toJSON(),
+        targetType: classification.targetType,
+        timeframe: classification.timeframe,
+        targetAmount: targetAmt,
+        currentAmount: currentAmt,
+        deadlineDate: t.deadline_date,
         remainingAmount: remainingAmt,
         remainingMonths,
         monthlyRequired: monthlyReq,
@@ -75,6 +191,18 @@ export async function listFinancialTargets(req: Request, res: Response): Promise
         totalRemainingAmount,
         totalMonthlyRequired,
         overallProgress,
+        needsTotalTarget,
+        needsTotalAllocated,
+        needsShortTermTarget,
+        needsShortTermAllocated,
+        needsLongTermTarget,
+        needsLongTermAllocated,
+        wantsTotalTarget,
+        wantsTotalAllocated,
+        wantsShortTermTarget,
+        wantsShortTermAllocated,
+        wantsLongTermTarget,
+        wantsLongTermAllocated,
       },
     });
   } catch (error: any) {
@@ -102,11 +230,22 @@ export async function getFinancialTargetById(req: Request, res: Response): Promi
     const monthlyReq = target.status === 'completed' ? 0 : Math.ceil(remainingAmt / remainingMonths);
     const progressPercent = targetAmt > 0 ? Math.min(100, Math.round((currentAmt / targetAmt) * 100)) : 0;
 
+    const classification = inferTargetClassification(
+      target.category,
+      (target as any).target_type,
+      (target as any).timeframe
+    );
+
     sendSuccess({
       res,
       message: 'Financial target retrieved successfully',
       data: {
         ...target.toJSON(),
+        targetType: classification.targetType,
+        timeframe: classification.timeframe,
+        targetAmount: targetAmt,
+        currentAmount: currentAmt,
+        deadlineDate: target.deadline_date,
         remainingAmount: remainingAmt,
         remainingMonths,
         monthlyRequired: monthlyReq,
@@ -121,13 +260,32 @@ export async function getFinancialTargetById(req: Request, res: Response): Promi
 export async function createFinancialTarget(req: Request, res: Response): Promise<void> {
   try {
     const userId = req.user?.id;
-    const { name, category, targetAmount, currentAmount, deadlineDate, priority, status, notes } = req.body;
+    const {
+      name,
+      category,
+      targetAmount,
+      currentAmount,
+      deadlineDate,
+      priority,
+      status,
+      notes,
+      targetType,
+      timeframe,
+    } = req.body;
+
+    const classification = inferTargetClassification(
+      category || 'other_needs_short',
+      targetType,
+      timeframe
+    );
 
     const target = await FinancialTarget.create({
       id: undefined as any,
       user_id: userId,
       name,
-      category: category || 'emergency_fund',
+      target_type: classification.targetType,
+      timeframe: classification.timeframe,
+      category: category || 'other_needs_short',
       target_amount: Number(targetAmount) || 0,
       current_amount: Number(currentAmount) || 0,
       deadline_date: deadlineDate,
@@ -152,8 +310,11 @@ export async function createFinancialTarget(req: Request, res: Response): Promis
       message: 'Financial target created successfully',
       data: {
         ...target.toJSON(),
+        targetType: classification.targetType,
+        timeframe: classification.timeframe,
         targetAmount: targetAmt,
         currentAmount: currentAmt,
+        deadlineDate: target.deadline_date,
         remainingAmount: remainingAmt,
         remainingMonths,
         monthlyRequired: monthlyReq,
@@ -178,10 +339,24 @@ export async function updateFinancialTarget(req: Request, res: Response): Promis
       return;
     }
 
-    const { name, category, targetAmount, currentAmount, deadlineDate, priority, status, notes } = req.body;
+    const {
+      name,
+      category,
+      targetAmount,
+      currentAmount,
+      deadlineDate,
+      priority,
+      status,
+      notes,
+      targetType,
+      timeframe,
+    } = req.body;
+
     await target.update({
       ...(name !== undefined && { name }),
       ...(category !== undefined && { category }),
+      ...(targetType !== undefined && { target_type: targetType }),
+      ...(timeframe !== undefined && { timeframe }),
       ...(targetAmount !== undefined && { target_amount: Number(targetAmount) }),
       ...(currentAmount !== undefined && { current_amount: Number(currentAmount) }),
       ...(deadlineDate !== undefined && { deadline_date: deadlineDate }),
@@ -190,6 +365,12 @@ export async function updateFinancialTarget(req: Request, res: Response): Promis
       ...(notes !== undefined && { notes }),
       updated_by: userId || 'system',
     });
+
+    const classification = inferTargetClassification(
+      target.category,
+      (target as any).target_type,
+      (target as any).timeframe
+    );
 
     const targetAmt = Number(target.target_amount) || 0;
     const currentAmt = Number(target.current_amount) || 0;
@@ -203,8 +384,11 @@ export async function updateFinancialTarget(req: Request, res: Response): Promis
       message: 'Financial target updated successfully',
       data: {
         ...target.toJSON(),
+        targetType: classification.targetType,
+        timeframe: classification.timeframe,
         targetAmount: targetAmt,
         currentAmount: currentAmt,
+        deadlineDate: target.deadline_date,
         remainingAmount: remainingAmt,
         remainingMonths,
         monthlyRequired: monthlyReq,

@@ -17,6 +17,8 @@ export const createFixedCostSchema = z.object({
   amount: z.number().positive('Amount must be greater than zero'),
   dueDay: z.number().int().min(1).max(31).default(1),
   notes: z.string().optional().nullable(),
+  startMonth: z.string().regex(/^\d{4}-\d{2}$/, 'startMonth must be in format YYYY-MM').optional().nullable(),
+  endMonth: z.string().regex(/^\d{4}-\d{2}$/, 'endMonth must be in format YYYY-MM').optional().nullable(),
 });
 
 export const updateFixedCostSchema = createFixedCostSchema.partial();

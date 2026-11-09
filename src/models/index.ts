@@ -79,13 +79,13 @@ export {
 export async function syncDatabase(alter = false): Promise<void> {
   try {
     await sequelize.authenticate();
-    console.log('✅ PostgreSQL Database connection established successfully.');
+    console.log(' PostgreSQL Database connection established successfully.');
 
     // In production we usually use migrations, but for dev and initialization alter: true will sync tables
     await sequelize.sync({ alter });
-    console.log('✅ All PostgreSQL database tables synchronized successfully.');
+    console.log(' All PostgreSQL database tables synchronized successfully.');
   } catch (error) {
-    console.error('❌ Unable to connect to or sync database:', error);
+    console.error(' Unable to connect to or sync database:', error);
     throw error;
   }
 }

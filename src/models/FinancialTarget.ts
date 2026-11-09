@@ -2,16 +2,35 @@ import { Model, DataTypes } from 'sequelize';
 import { sequelize } from '../config/database.js';
 import { baseModelAttributes, BaseAuditAttributes } from './BaseModel.js';
 
+export type TargetType = 'needs' | 'wants';
+export type TargetTimeframe = 'short_term' | 'long_term';
+
 export type TargetCategory =
-  | 'emergency_fund'
+  // Kebutuhan (Needs) - Jangka Pendek
+  | 'vehicle_maintenance'
+  | 'home_maintenance'
+  | 'medical_health'
+  | 'tax_bill'
+  | 'other_needs_short'
+  // Kebutuhan (Needs) - Jangka Panjang
   | 'property'
-  | 'vehicle'
-  | 'investment'
+  | 'emergency_fund'
   | 'education'
-  | 'travel'
-  | 'gadget'
-  | 'wedding'
   | 'retirement'
+  | 'other_needs_long'
+  // Keinginan (Wants) - Jangka Pendek
+  | 'gadget'
+  | 'shopping'
+  | 'entertainment'
+  | 'hobby'
+  | 'other_wants_short'
+  // Keinginan (Wants) - Jangka Panjang
+  | 'travel'
+  | 'vehicle'
+  | 'wedding'
+  | 'investment'
+  | 'other_wants_long'
+  // Legacy / fallback
   | 'other';
 
 export type TargetPriority = 'high' | 'medium' | 'low';
@@ -20,7 +39,9 @@ export type TargetStatus = 'in_progress' | 'completed' | 'paused';
 export interface FinancialTargetAttributes extends BaseAuditAttributes {
   user_id?: string | null;
   name: string;
-  category: TargetCategory;
+  target_type: TargetType;
+  timeframe: TargetTimeframe;
+  category: TargetCategory | string;
   target_amount: number;
   current_amount: number;
   deadline_date: string; // 'YYYY-MM-DD'
@@ -34,7 +55,9 @@ export class FinancialTarget extends Model<FinancialTargetAttributes> implements
   declare id: string;
   declare user_id: string | null;
   declare name: string;
-  declare category: TargetCategory;
+  declare target_type: TargetType;
+  declare timeframe: TargetTimeframe;
+  declare category: TargetCategory | string;
   declare target_amount: number;
   declare current_amount: number;
   declare deadline_date: string;
@@ -67,10 +90,20 @@ FinancialTarget.init(
       type: DataTypes.STRING(255),
       allowNull: false,
     },
+    target_type: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'needs',
+    },
+    timeframe: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'short_term',
+    },
     category: {
       type: DataTypes.STRING(50),
       allowNull: false,
-      defaultValue: 'emergency_fund',
+      defaultValue: 'other_needs_short',
     },
     target_amount: {
       type: DataTypes.DECIMAL(18, 2),
@@ -115,6 +148,8 @@ FinancialTarget.init(
     updatedAt: 'updated_at',
     indexes: [
       { fields: ['user_id'] },
+      { fields: ['target_type'] },
+      { fields: ['timeframe'] },
       { fields: ['category'] },
       { fields: ['status'] },
       { fields: ['display_order'] },

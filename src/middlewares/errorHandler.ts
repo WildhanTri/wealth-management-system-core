@@ -7,7 +7,7 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): void {
-  console.error('💥 Unhandled Exception Caught in Middleware:', err);
+  console.error(' Unhandled Exception Caught in Middleware:', err);
 
   const statusCode = err.statusCode || err.status || 500;
   const message = err.message || 'An unexpected internal error occurred';

@@ -20,15 +20,15 @@ export async function ensureDatabaseExists(): Promise<void> {
     const res = await defaultClient.query(checkDbQuery, [env.database.name]);
 
     if (res.rowCount === 0) {
-      console.log(`📡 Database '${env.database.name}' not found. Creating...`);
+      console.log(` Database '${env.database.name}' not found. Creating...`);
       // Database names cannot be parameterized in CREATE DATABASE
       await defaultClient.query(`CREATE DATABASE "${env.database.name}"`);
-      console.log(`✅ Database '${env.database.name}' created successfully.`);
+      console.log(` Database '${env.database.name}' created successfully.`);
     } else {
-      console.log(`📦 Database '${env.database.name}' is ready.`);
+      console.log(` Database '${env.database.name}' is ready.`);
     }
   } catch (error) {
-    console.error(`❌ Failed to verify or create database '${env.database.name}':`, error);
+    console.error(` Failed to verify or create database '${env.database.name}':`, error);
     throw error;
   } finally {
     await defaultClient.end();

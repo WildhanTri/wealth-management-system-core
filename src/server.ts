@@ -4,7 +4,7 @@ import { ensureDatabaseExists } from './config/database.js';
 import { syncDatabase, sequelize } from './models/index.js';
 
 async function bootstrap() {
-  console.log('🚀 Initializing Crescent Wealth Management System Core Backend...');
+  console.log(' Initializing Crescent Wealth Management System Core Backend...');
 
   try {
     // 1. Verify or create PostgreSQL database
@@ -19,21 +19,21 @@ async function bootstrap() {
     // 4. Start HTTP Server
     const server = app.listen(env.port, () => {
       console.log(`\n======================================================`);
-      console.log(`✨ Crescent Wealth Core Backend API is running!`);
-      console.log(`🌍 Environment: ${env.nodeEnv}`);
-      console.log(`🔗 API Base URL: http://localhost:${env.port}/api/v1`);
-      console.log(`🩺 Health Check: http://localhost:${env.port}/api/v1/health`);
-      console.log(`📊 API Logs:    http://localhost:${env.port}/api/v1/api-logs`);
+      console.log(` Crescent Wealth Core Backend API is running!`);
+      console.log(` Environment: ${env.nodeEnv}`);
+      console.log(` API Base URL: http://localhost:${env.port}/api/v1`);
+      console.log(` Health Check: http://localhost:${env.port}/api/v1/health`);
+      console.log(` API Logs:    http://localhost:${env.port}/api/v1/api-logs`);
       console.log(`======================================================\n`);
     });
 
     // Graceful shutdown handling
     const shutdown = async (signal: string) => {
-      console.log(`\n🛑 Received ${signal}. Gracefully shutting down...`);
+      console.log(`\n Received ${signal}. Gracefully shutting down...`);
       server.close(async () => {
         try {
           await sequelize.close();
-          console.log('🔒 Database connection closed safely.');
+          console.log(' Database connection closed safely.');
           process.exit(0);
         } catch (err) {
           console.error('Error during database disconnect:', err);
@@ -45,7 +45,7 @@ async function bootstrap() {
     process.on('SIGINT', () => shutdown('SIGINT'));
     process.on('SIGTERM', () => shutdown('SIGTERM'));
   } catch (error) {
-    console.error('💥 Fatal error during backend bootstrap:', error);
+    console.error(' Fatal error during backend bootstrap:', error);
     process.exit(1);
   }
 }

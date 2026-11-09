@@ -21,6 +21,7 @@ export interface TransactionAttributes extends BaseAuditAttributes {
   date: string;
   emotional_trigger: EmotionalTrigger;
   is_impulse: boolean;
+  display_order?: number | null;
 }
 
 export class Transaction extends Model<TransactionAttributes> implements TransactionAttributes {
@@ -34,6 +35,7 @@ export class Transaction extends Model<TransactionAttributes> implements Transac
   declare date: string;
   declare emotional_trigger: EmotionalTrigger;
   declare is_impulse: boolean;
+  declare display_order: number | null;
 
   declare created_at: Date;
   declare created_by: string | null;
@@ -94,6 +96,11 @@ Transaction.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false,
+    },
+    display_order: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
     },
   },
   {

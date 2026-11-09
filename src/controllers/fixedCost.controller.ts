@@ -49,7 +49,16 @@ export async function listFixedCosts(req: Request, res: Response): Promise<void>
     let paidCount = 0;
     let pendingCount = 0;
 
-    const items = costs.map((c) => {
+    // Filter applicable costs for the queried monthYear
+    const applicableCosts = costs.filter((c) => {
+      const start = (c as any).start_month;
+      const end = (c as any).end_month;
+      if (start && start > monthYear) return false;
+      if (end && end < monthYear) return false;
+      return true;
+    });
+
+    const items = applicableCosts.map((c) => {
       const amt = Number(c.amount) || 0;
       totalObligation += amt;
 
@@ -59,7 +68,7 @@ export async function listFixedCosts(req: Request, res: Response): Promise<void>
       const paidAt = payment ? payment.paid_at : null;
 
       if (isPaid) {
-        totalPaid += amt;
+        totalPaid += paidAmount > 0 ? paidAmount : amt;
         paidCount++;
       } else {
         totalPending += amt;
@@ -68,6 +77,8 @@ export async function listFixedCosts(req: Request, res: Response): Promise<void>
 
       return {
         ...c.toJSON(),
+        startMonth: (c as any).start_month ?? null,
+        endMonth: (c as any).end_month ?? null,
         currentMonth: monthYear,
         isPaid,
         paidAmount,
@@ -101,7 +112,7 @@ export async function listFixedCosts(req: Request, res: Response): Promise<void>
 export async function createFixedCost(req: Request, res: Response): Promise<void> {
   try {
     const userId = req.user?.id;
-    const { name, category, amount, dueDay, notes } = req.body;
+    const { name, category, amount, dueDay, notes, startMonth, endMonth } = req.body;
 
     const cost = await FixedCost.create({
       id: undefined as any,
@@ -111,6 +122,8 @@ export async function createFixedCost(req: Request, res: Response): Promise<void
       amount: Number(amount) || 0,
       due_day: Number(dueDay) || 1,
       notes,
+      start_month: startMonth || null,
+      end_month: endMonth || null,
       created_by: userId || 'system',
       updated_by: userId || 'system',
       is_active: true,
@@ -122,6 +135,8 @@ export async function createFixedCost(req: Request, res: Response): Promise<void
       message: 'Fixed cost item created successfully',
       data: {
         ...cost.toJSON(),
+        startMonth: cost.start_month ?? null,
+        endMonth: cost.end_month ?? null,
         amount: Number(cost.amount) || 0,
         dueDay: cost.due_day,
         isPaid: false,
@@ -146,13 +161,15 @@ export async function updateFixedCost(req: Request, res: Response): Promise<void
       return;
     }
 
-    const { name, category, amount, dueDay, notes } = req.body;
+    const { name, category, amount, dueDay, notes, startMonth, endMonth } = req.body;
     await cost.update({
       ...(name !== undefined && { name }),
       ...(category !== undefined && { category }),
       ...(amount !== undefined && { amount: Number(amount) }),
       ...(dueDay !== undefined && { due_day: Number(dueDay) }),
       ...(notes !== undefined && { notes }),
+      ...(startMonth !== undefined && { start_month: startMonth }),
+      ...(endMonth !== undefined && { end_month: endMonth }),
       updated_by: userId || 'system',
     });
 
@@ -161,6 +178,8 @@ export async function updateFixedCost(req: Request, res: Response): Promise<void
       message: 'Fixed cost updated successfully',
       data: {
         ...cost.toJSON(),
+        startMonth: cost.start_month ?? null,
+        endMonth: cost.end_month ?? null,
         amount: Number(cost.amount) || 0,
         dueDay: cost.due_day,
       },
@@ -262,22 +281,66 @@ export async function toggleFixedCostPaid(req: Request, res: Response): Promise<
 export async function getFixedCostHistory(req: Request, res: Response): Promise<void> {
   try {
     const userId = req.user?.id;
+    const monthsParam = req.query.months ? String(req.query.months).toLowerCase().trim() : '6';
 
-    // Generate past 6 months list
-    const months: string[] = [];
     const now = new Date();
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      months.push(`${y}-${m}`);
-    }
+    const months: string[] = [];
 
     const costs = await FixedCost.findAll({
       where: { is_deleted: false, ...(userId && { user_id: userId }) },
     });
 
-    const totalCostBase = costs.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
+    if (monthsParam === 'all') {
+      const earliestPayment = await FixedCostPayment.findOne({
+        where: { is_deleted: false, ...(userId && { user_id: userId }) },
+        order: [['month_year', 'ASC']],
+      });
+
+      let startYear = now.getFullYear();
+      let startMonth = now.getMonth();
+
+      if (earliestPayment?.month_year) {
+        const [pY, pM] = earliestPayment.month_year.split('-').map(Number);
+        if (pY && pM) {
+          if (pY < startYear || (pY === startYear && pM - 1 < startMonth)) {
+            startYear = pY;
+            startMonth = pM - 1;
+          }
+        }
+      }
+
+      // Also check costs start_month
+      for (const c of costs) {
+        const sMonth = (c as any).start_month;
+        if (sMonth) {
+          const [cY, cM] = sMonth.split('-').map(Number);
+          if (cY && cM) {
+            if (cY < startYear || (cY === startYear && cM - 1 < startMonth)) {
+              startYear = cY;
+              startMonth = cM - 1;
+            }
+          }
+        }
+      }
+
+      const totalDiff = (now.getFullYear() - startYear) * 12 + (now.getMonth() - startMonth);
+      const effectiveCount = Math.max(totalDiff + 1, 6);
+
+      for (let i = effectiveCount - 1; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        months.push(`${y}-${m}`);
+      }
+    } else {
+      const count = monthsParam === '1y' || monthsParam === '12' ? 12 : Math.max(1, parseInt(monthsParam, 10) || 6);
+      for (let i = count - 1; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        months.push(`${y}-${m}`);
+      }
+    }
 
     const payments = await FixedCostPayment.findAll({
       where: {
@@ -288,17 +351,26 @@ export async function getFixedCostHistory(req: Request, res: Response): Promise<
     });
 
     const history = months.map((m) => {
+      const applicableForMonth = costs.filter((c) => {
+        const start = (c as any).start_month;
+        const end = (c as any).end_month;
+        if (start && start > m) return false;
+        if (end && end < m) return false;
+        return true;
+      });
+      const monthObligation = applicableForMonth.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
+
       const mPayments = payments.filter((p) => p.month_year === m && p.is_paid);
       const paidTotal = mPayments.reduce((acc, p) => acc + (Number(p.paid_amount) || 0), 0);
       const paidBillsCount = mPayments.length;
 
       return {
         monthYear: m,
-        totalObligation: totalCostBase,
+        totalObligation: monthObligation,
         totalPaid: paidTotal,
-        totalPending: Math.max(0, totalCostBase - paidTotal),
+        totalPending: Math.max(0, monthObligation - paidTotal),
         paidCount: paidBillsCount,
-        totalBills: costs.length,
+        totalBills: applicableForMonth.length,
       };
     });
 
